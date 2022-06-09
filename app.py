@@ -25,7 +25,7 @@ st.title("Arquitectura y contenidos")
 st.text("Devuelve datos relativos a la arquitectura y los contenidos.")
 st.text("Tenemos únicamente en cuenta contenidos indexables")
 
-niveles_directorios=st.number_input(min_value=1,max_value=5,value=2,label='Seleccione el nivel de directorios a obtener')
+
 
 f_entrada=st.file_uploader('CSV con datos exportados de Screaming Frog (internal_all.csv)', type='csv')
 
@@ -34,14 +34,29 @@ indexables='Indexable'
 
 if f_entrada is not None:
     df=pd.read_csv(f_entrada)
-    #Obtenemos la ruta de directorios hasta el nivel especificado
-    i=1
-    while i <= niveles_directorios:
-        df['Directorio_'+str(i)]=df['Address'].apply(lambda x:getPathUrl(x,i))
-        i+=1
+
     #Filtramos los resultados html e indexables
     df_mask=(df['Content Type'].str.contains(content_type))&(df['Indexability']==indexables)
     df_html=df[df_mask]
+
+    #Mostramos las URL más enlazadas
+    df_top_enlaces=df_html[['Address','Unique Inlinks', 'Inlinks']].sort_values(by='Unique Inlinks',ascending=False).reset_index(drop=True)
+    st.subheader('Top de URL enlazadas')
+    st.dataframe(df_top_enlaces, width=1000)
+    st.download_button(
+        label="Descargar como CSV",
+        data=df_top_enlaces.to_csv(index = False).encode('utf-8'),
+        file_name='top_enlazadas.csv',
+        mime='text/csv',
+    )
+    
+    #Obtenemos la ruta de directorios hasta el nivel especificado
+    niveles_directorios=st.number_input(min_value=1,max_value=6,value=2,label='Seleccione el nivel de directorios a obtener')
+    i=1
+    while i <= niveles_directorios:
+        df_html['Directorio_'+str(i)]=df_html['Address'].apply(lambda x:getPathUrl(x,i))
+        i+=1
+    
     n_dir='Directorio_'+str(niveles_directorios)
     lista_directorios=df_html[n_dir].unique().tolist()
     #Eliminamos el que venga vacío, porque realmente no existe
@@ -49,17 +64,6 @@ if f_entrada is not None:
 
     df_dir=pd.DataFrame(columns=[n_dir, 'Num Pages', 'Unique Inlinks', 'Unique Outlinks'])
     df_dir[n_dir]=directorios
-
-    df_top_enlaces=df_html[['Address','Unique Inlinks', 'Inlinks']].sort_values(by='Unique Inlinks',ascending=False).reset_index(drop=True)
-    st.subheader('Top de URL enlazadas')
-
-    st.dataframe(df_top_enlaces, height=500, width=1000)
-    st.download_button(
-        label="Descargar como CSV",
-        data=df_dir.to_csv(index = False).encode('utf-8'),
-        file_name='top_enlazadas.csv',
-        mime='text/csv',
-    )
 
     #Calculamos el número de páginas, inlinks y outlinks por directorio
     for i in range(len(df_dir)):
