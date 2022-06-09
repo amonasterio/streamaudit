@@ -4,6 +4,8 @@ import pandas as pd
 from urllib.parse import unquote, urlparse
 from pathlib import PosixPath, PurePosixPath
 
+
+
 #Obtener los directorios de una URL por nivel
 def getPathUrl(url, nivel):
     ruta=''
@@ -48,15 +50,16 @@ if f_entrada is not None:
     df_dir=pd.DataFrame(columns=[n_dir, 'Num Pages', 'Unique Inlinks', 'Unique Outlinks'])
     df_dir[n_dir]=directorios
 
-    df_top_enlaces=df_html[['Address','Unique Inlinks', 'Inlinks']].sort_values(by='Unique Inlinks',ascending=False)
+    df_top_enlaces=df_html[['Address','Unique Inlinks', 'Inlinks']].sort_values(by='Unique Inlinks',ascending=False).reset_index(drop=True)
     st.subheader('Top de URL enlazadas')
-    st.dataframe(df_top_enlaces, height=500, width=500)
+
+    st.dataframe(df_top_enlaces, height=500, width=1000)
     st.download_button(
-                label="Descargar como CSV",
-                data=df_dir.to_csv(index = False).encode('utf-8'),
-                file_name='top_enlazadas.csv',
-                mime='text/csv',
-            )
+        label="Descargar como CSV",
+        data=df_dir.to_csv(index = False).encode('utf-8'),
+        file_name='top_enlazadas.csv',
+        mime='text/csv',
+    )
 
     #Calculamos el número de páginas, inlinks y outlinks por directorio
     for i in range(len(df_dir)):
@@ -74,8 +77,24 @@ if f_entrada is not None:
                 file_name='directorios.csv',
                 mime='text/csv',
             )
+    
 
-    limites=[450,1200]
+    st.subheader('Densidad de contenido')
+    max_word_count=df_html["Word Count"].max()
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric(label="Max. palabras en URL", value=max_word_count)
+    with col2:
+        st.metric(label="Min. palabras en URL", value=df_html["Word Count"].min())
+    with col3:
+        st.metric(label="Media palabras en URL", value=int(df_html["Word Count"].mean()))
+    with col4:
+        st.metric(label="Mediana palabras en URL", value=int(df_html["Word Count"].median()))
+    
+    inferior=st.number_input(min_value=0,max_value=max_word_count,value=400,label='Seleccione valor intermedio inferior')
+    superior=st.number_input(min_value=inferior,max_value=max_word_count,value=int((inferior+max_word_count)/2),label='Seleccione valor intermedio superior')
+    limites=[inferior,superior]
     str_bajo='Bajo [0,'+str(limites[0])+']'
     str_medio='Medio ['+str(limites[0])+'-'+str(limites[1])+']'
     str_alto='Alto ['+str(limites[1])+'-...]'
@@ -86,6 +105,29 @@ if f_entrada is not None:
         str_medio:len(df_html[(df_html["Word Count"]>limites[0]) &(df_html["Word Count"]<=limites[1])].index),
         str_alto:len(df_html[df_html["Word Count"]>limites[1]].index)
     }
-    st.subheader('Densidad de contenido')
+    
     st.dataframe(pd.DataFrame(dict_contenido,index=[0]))
 
+    st.subheader('Anchor text utilizados')
+    f_enlaces=st.file_uploader('CSV con export de Inlinks Screaming Frog', type='csv')
+    if f_enlaces is not None:
+        df_enlaces=pd.read_csv(f_enlaces)
+        df_hiperlinks=df_enlaces[df_enlaces['Type']=='Hyperlink']
+
+        lista_anchors=df_hiperlinks['Anchor'].unique().tolist()
+
+
+        df_anchors=pd.DataFrame(columns=['Anchor', 'Num. veces'])
+        df_anchors['Anchor']=lista_anchors
+        for i in range(len(df_anchors)):
+            anchor_actual=df_anchors.loc[i,'Anchor']
+            df_temporal=df_enlaces[df_enlaces['Anchor']==anchor_actual]
+            df_anchors.iloc[i,1]=len(df_temporal.index)
+            df_anchors=df_anchors.sort_values(by='Num. veces',ascending=False).reset_index(drop=True)
+        st.dataframe(df_anchors)
+        st.download_button(
+            label="Descargar como CSV",
+            data=df_dir.to_csv(index = False).encode('utf-8'),
+            file_name='anchors.csv',
+            mime='text/csv',
+        )
