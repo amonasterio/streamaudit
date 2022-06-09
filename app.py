@@ -23,11 +23,11 @@ st.set_page_config(
 )
 st.title("Arquitectura y contenidos")
 st.text("Devuelve datos relativos a la arquitectura y los contenidos.")
-st.text("Tenemos solo enc cuenta contenidos indexables inicialmente")
+st.text("Tenemos únicamente en cuenta contenidos indexables")
 
 niveles_directorios=st.number_input(min_value=1,max_value=5,value=2,label='Seleccione el nivel de directorios a obtener')
 
-f_entrada=st.file_uploader('CSV con datos exportados de Screaming Frog', type='csv')
+f_entrada=st.file_uploader('CSV con datos exportados de Screaming Frog (internal_all.csv)', type='csv')
 
 content_type='html'
 indexables='Indexable'
@@ -109,7 +109,7 @@ if f_entrada is not None:
     st.dataframe(pd.DataFrame(dict_contenido,index=[0]))
 
     st.subheader('Anchor text utilizados')
-    f_enlaces=st.file_uploader('CSV con export de Inlinks Screaming Frog', type='csv')
+    f_enlaces=st.file_uploader('CSV con export de Inlinks Screaming Frog (all_inlinks.csv)', type='csv')
     if f_enlaces is not None:
         df_enlaces=pd.read_csv(f_enlaces)
         df_hiperlinks=df_enlaces[df_enlaces['Type']=='Hyperlink']
