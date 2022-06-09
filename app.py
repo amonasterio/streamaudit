@@ -74,7 +74,7 @@ if f_entrada is not None:
         df_dir.loc[i,'Unique Outlinks']=df_temporal['Unique Outlinks'].sum()
     
     st.subheader('Análisis por directorio')
-    st.dataframe(df_dir, height=500)
+    st.dataframe(df_dir, width=1000)
     st.download_button(
                 label="Descargar como CSV",
                 data=df_dir.to_csv(index = False).encode('utf-8'),
