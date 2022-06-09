@@ -20,7 +20,8 @@ st.set_page_config(
    page_title="Arquitectura y contenidos"
 )
 st.title("Arquitectura y contenidos")
-st.text("Devuelve datos relativos a la arquitectura y los contenidos")
+st.text("Devuelve datos relativos a la arquitectura y los contenidos.")
+st.text("Tenemos solo enc cuenta contenidos indexables inicialmente")
 
 niveles_directorios=st.number_input(min_value=1,max_value=5,value=2,label='Seleccione el nivel de directorios a obtener')
 
