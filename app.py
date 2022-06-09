@@ -124,7 +124,7 @@ if f_entrada is not None:
             df_temporal=df_enlaces[df_enlaces['Anchor']==anchor_actual]
             df_anchors.iloc[i,1]=len(df_temporal.index)
             df_anchors=df_anchors.sort_values(by='Num. veces',ascending=False).reset_index(drop=True)
-        st.dataframe(df_anchors)
+        st.dataframe(df_anchors, width=500)
         st.download_button(
             label="Descargar como CSV",
             data=df_dir.to_csv(index = False).encode('utf-8'),
