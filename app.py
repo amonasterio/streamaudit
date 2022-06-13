@@ -49,6 +49,7 @@ if f_entrada is not None:
         file_name='top_enlazadas.csv',
         mime='text/csv',
     )
+
     
     #Obtenemos la ruta de directorios hasta el nivel especificado
     niveles_directorios=st.number_input(min_value=1,max_value=6,value=2,label='Seleccione el nivel de directorios a obtener')
@@ -72,7 +73,10 @@ if f_entrada is not None:
         df_dir.loc[i,"Num Pages"]=len(df_temporal.index)
         df_dir.loc[i,'Unique Inlinks']=df_temporal['Unique Inlinks'].sum()
         df_dir.loc[i,'Unique Outlinks']=df_temporal['Unique Outlinks'].sum()
-    
+    df_dir['Unique Inlinks/pag']=df_dir['Unique Inlinks']/df_dir["Num Pages"]
+    df_dir['Unique Outlinks/pag']=df_dir['Unique Outlinks']/df_dir["Num Pages"]
+    df_dir=df_dir.sort_values(by='Num Pages',ascending=False).reset_index(drop=True)    
+
     st.subheader('Análisis por directorio')
     st.dataframe(df_dir, width=1000)
     st.download_button(
