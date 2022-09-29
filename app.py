@@ -81,7 +81,7 @@ if f_entrada is not None:
     st.dataframe(df_dir, width=1000)
     st.download_button(
                 label="Descargar como CSV",
-                data=df_dir.to_csv(index = False).encode('utf-8'),
+                data=df_dir.to_csv(index = False, decimal=',').encode('utf-8'),
                 file_name='directorios.csv',
                 mime='text/csv',
             )

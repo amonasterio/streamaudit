@@ -1,1 +1,4 @@
 *.csv
+audit.py
+enlaces.py
+test.py
