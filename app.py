@@ -132,7 +132,7 @@ if f_entrada is not None:
         st.dataframe(df_anchors, width=1000)
         st.download_button(
             label="Descargar como CSV",
-            data=df_anchors.to_csv(index = False).encode('utf-8'),
+            data=df_anchors.to_csv(index = False, quotechar='"').encode('utf-8'),
             file_name='anchors.csv',
             mime='text/csv',
         )
