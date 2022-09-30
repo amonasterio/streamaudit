@@ -72,16 +72,13 @@ if f_entrada is not None:
         df_temporal=df_html[df_html[n_dir]==dir_actual]
         df_dir.loc[i,"Num Pages"]=len(df_temporal.index)
         df_dir.loc[i,'Unique Inlinks']=df_temporal['Unique Inlinks'].sum()
-        df_dir.loc[i,'Unique Outlinks']=df_temporal['Unique Outlinks'].sum()
-    df_dir['Unique Inlinks/pag']=df_dir['Unique Inlinks']/df_dir["Num Pages"]
-    df_dir['Unique Outlinks/pag']=df_dir['Unique Outlinks']/df_dir["Num Pages"]
-    df_dir=df_dir.sort_values(by='Num Pages',ascending=False).reset_index(drop=True)    
+        df_dir.loc[i,'Unique Outlinks']=df_temporal['Unique Outlinks'].sum()    
 
     st.subheader('Análisis por directorio')
     st.dataframe(df_dir, width=1000)
     st.download_button(
                 label="Descargar como CSV",
-                data=df_dir.to_csv(index = False, decimal=',').encode('utf-8'),
+                data=df_dir.to_csv(index = False).encode('utf-8'),
                 file_name='directorios.csv',
                 mime='text/csv',
             )
@@ -135,7 +132,7 @@ if f_entrada is not None:
         st.dataframe(df_anchors, width=1000)
         st.download_button(
             label="Descargar como CSV",
-            data=df_dir.to_csv(index = False, decimal=',').encode('utf-8'),
+            data=df_anchors.to_csv(index = False).encode('utf-8'),
             file_name='anchors.csv',
             mime='text/csv',
         )
