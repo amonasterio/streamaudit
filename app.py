@@ -3,7 +3,8 @@ import posixpath
 import pandas as pd
 from urllib.parse import unquote, urlparse
 from pathlib import PosixPath, PurePosixPath
-
+import logging
+logging.basicConfig(filename='test.log')
 
 
 #Obtener los directorios de una URL por nivel
@@ -124,11 +125,18 @@ if f_entrada is not None:
 
         df_anchors=pd.DataFrame(columns=['Anchor', 'Num. veces'])
         df_anchors['Anchor']=lista_anchors
-        for i in range(len(df_anchors)):
+        total_count=0
+        bar = st.progress(0.0)
+        longitud=len(df_anchors)
+        for i in range(longitud):
+            total_count+=1
+            logging.info("Procesando "+str(total_count)+" / "+str(longitud))
+            percent_complete=total_count/longitud
             anchor_actual=df_anchors.loc[i,'Anchor']
             df_temporal=df_enlaces[df_enlaces['Anchor']==anchor_actual]
             df_anchors.iloc[i,1]=len(df_temporal.index)
             df_anchors=df_anchors.sort_values(by='Num. veces',ascending=False).reset_index(drop=True)
+            bar.progress(percent_complete)
         st.dataframe(df_anchors, width=1000)
         st.download_button(
             label="Descargar como CSV",
