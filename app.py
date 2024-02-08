@@ -19,6 +19,36 @@ def getPathUrl(url, nivel):
             i+=1
     return ruta
 
+#Obtiene el número de veces que se repite cada anchor.
+#Devuelve un DataFrame con las columnas "Anchor" y "Num. veces"
+def getAnchors(df_enlaces): 
+    conteo_elementos = df_enlaces['Anchor'].value_counts().to_frame("Num. veces")
+    conteo_elementos.reset_index(inplace=True)
+    df_anchors=conteo_elementos.rename(columns={'index':'Anchors'})
+    if df_anchors is not None:
+        df_anchors=df_anchors.sort_values("Num. veces",ascending=False)
+    return df_anchors
+
+#Obtiene el número de veces que se repite cada anchor en cada destino
+#Devuelve un DataFrame con las columnas "Anchor", "URL destino" y "Num. veces"
+def getDataframeAnchorsDestino(df_enlaces):
+    #Contamos las repeticiones de elementos: Anchor, Destination. Lo devuelve en formato serie.
+    serie = df_enlaces.pivot_table(index = ['Anchor',"Destination"], aggfunc ='size')
+    df_final=serie.to_frame("Num. veces")
+    df_final.reset_index(inplace=True)
+    if df_final is not None:
+        df_final=df_final.sort_values("Num. veces",ascending=False)
+    return df_final
+
+###Para pasar la pivot table dinámica con los datos de repeticiones de anchors a DataFrame
+#COmo índice tiene la tupla anchor, URL destino y como valor el número de repeticiones
+def serieTuplaValor2DataFrame(serie):
+    df=pd.DataFrame(columns=['Anchor', 'URL destino', 'Num. veces'])
+    for indice, valor in serie.iteritems():
+        nueva_fila=pd.Series({'Anchor':indice[0],'URL destino':indice [1],'Num. veces':valor})
+        df = pd.concat([df, nueva_fila.to_frame().T], ignore_index=True)
+    return df
+
 st.set_page_config(
    page_title="Arquitectura y contenidos"
 )
@@ -41,7 +71,7 @@ if f_entrada is not None:
     df_html=df[df_mask]
 
     #Mostramos las URL más enlazadas
-    df_top_enlaces=df_html[['Address','Unique Inlinks', 'Inlinks']].sort_values(by='Unique Inlinks',ascending=False).reset_index(drop=True)
+    df_top_enlaces=df_html[['Address','Unique Inlinks', 'Inlinks', 'Crawl Depth']].sort_values(by='Unique Inlinks',ascending=False).reset_index(drop=True)
     st.subheader('Top de URL enlazadas')
     st.dataframe(df_top_enlaces, width=1000)
     st.download_button(
@@ -74,6 +104,9 @@ if f_entrada is not None:
         df_dir.loc[i,"Num Pages"]=len(df_temporal.index)
         df_dir.loc[i,'Unique Inlinks']=df_temporal['Unique Inlinks'].sum()
         df_dir.loc[i,'Unique Outlinks']=df_temporal['Unique Outlinks'].sum()    
+        df_dir.loc[i,'Media de palabras']=df_temporal['Word Count'].mean().round() 
+        df_dir.loc[i,'Mediana de palabras']=df_temporal['Word Count'].median().round() 
+       
 
     st.subheader('Análisis por directorio')
     st.dataframe(df_dir, width=1000)
@@ -115,32 +148,40 @@ if f_entrada is not None:
     st.dataframe(pd.DataFrame(dict_contenido,index=[0]))
 
     st.subheader('Anchor text utilizados')
+    dominio=st.text_input("Dominio (para extraer únicamente enlaces internos)")
     f_enlaces=st.file_uploader('CSV con export de Inlinks Screaming Frog (all_inlinks.csv)', type='csv')
     if f_enlaces is not None:
-        df_enlaces=pd.read_csv(f_enlaces)
-        df_hiperlinks=df_enlaces[df_enlaces['Type']=='Hyperlink']
+        #Columnas sonbre las que vamos a trabajar
+        columnas=["Type","Source","Destination","Alt Text","Anchor","Status Code"]
+        df_enlaces=pd.read_csv(f_enlaces, usecols=columnas)
+        #Filtramos solo enlaces en hyperlinks e imágenes
+        df_hyperlinks=df_enlaces[df_enlaces['Type'].isin(['Hyperlink','Image'])]
+        #Dejamos sólo elaces a URL internas dentro del dominio enlazado
+        df_internal_links=df_hyperlinks[df_hyperlinks['Destination'].str.contains(dominio,na=False)]
+        #Hacemos una copia para que no de problemas al trabajar e intentar rellenar los campos vacíos
+        df_copy=df_internal_links.copy()
+        #Si Anchor es vacío incluimos el valor del atributo alt
+        df_copy['Anchor'].fillna(df_internal_links['Alt Text'], inplace=True)
+        #Contamos las repeticiones de elementos: Anchor
+        df_anchors=getAnchors(df_copy)
 
-        lista_anchors=df_hiperlinks['Anchor'].unique().tolist()
-
-
-        df_anchors=pd.DataFrame(columns=['Anchor', 'Num. veces'])
-        df_anchors['Anchor']=lista_anchors
-        total_count=0
-        bar = st.progress(0.0)
-        longitud=len(df_anchors)
-        for i in range(longitud):
-            total_count+=1
-            logging.info("Procesando "+str(total_count)+" / "+str(longitud))
-            percent_complete=total_count/longitud
-            anchor_actual=df_anchors.loc[i,'Anchor']
-            df_temporal=df_enlaces[df_enlaces['Anchor']==anchor_actual]
-            df_anchors.iloc[i,1]=len(df_temporal.index)
-            df_anchors=df_anchors.sort_values(by='Num. veces',ascending=False).reset_index(drop=True)
-            bar.progress(percent_complete)
+        st.subheader("Todos los anchors")
         st.dataframe(df_anchors, width=1000)
         st.download_button(
             label="Descargar como CSV",
-            data=df_anchors.to_csv(index = False, quotechar='"').encode('utf-8'),
+            data=df_anchors.to_csv(index = None, quotechar='"').encode('utf-8'),
             file_name='anchors.csv',
+            mime='text/csv',
+        )
+
+        #Contamos las repeticiones de elementos: Anchor, Destination. 
+        df_anchors_dest=getDataframeAnchorsDestino(df_copy)
+
+        st.subheader("Anchors por destino")
+        st.dataframe(df_anchors_dest, width=1000)
+        st.download_button(
+            label="Descargar como CSV",
+            data=df_anchors_dest.to_csv(index = None, quotechar='"').encode('utf-8'),
+            file_name='anchors_dest.csv',
             mime='text/csv',
         )
