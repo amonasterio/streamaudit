@@ -3,14 +3,21 @@ import pandas as pd
 from urllib.parse import unquote, urlparse
 from pathlib import PurePosixPath
 import logging
+import matplotlib.pyplot as plt
 logging.basicConfig(filename='test.log')
 
 CANONICALISED='Canonicalised'
+NO_RESPONSE="No Response"
+BLOQUEADO_ROBOTS="Blocked by robots.txt"
+NOINDEX="noindex"
 
 #Definimos las columnas sobre las que trabajaremos y su tipo
 columnas=["Address","Content Type","Status Code","Indexability","Indexability Status","Crawl Depth",'Unique Inlinks', 'Inlinks','Unique Outlinks', 'Outlinks','Word Count']
 tipo={"Address": "string", "Content Type": "string", "Status Code":"int","Indexability":"string", "Indexability Status":"string","Crawl Depth":int,'Unique Inlinks':int, 'Inlinks':int,'Unique Outlinks':int, 'Outlinks':int,'Word Count':int}
 
+def darFormatoPorcentaje(value_in):
+    porcentaje = "{:.2%}".format(value_in)
+    return porcentaje
 
 #obtener el dominio de una URL
 def getDomainFromUrl(url_in):
@@ -32,6 +39,13 @@ def getPathUrl(url, nivel):
             i+=1
     return ruta
 
+#Genera un gráfico de tarta
+def getPieChart(valores, etiquetas):
+    fig, ax = plt.subplots() 
+    ax.scatter(etiquetas, valores)
+    # Create a pie chart
+    plt.pie(valores, labels=etiquetas, autopct='%1.1f%%')
+    return fig
 
 #Filtra las URL en formato html o pdf validas en función de si son indexables, parcialmente indexables o todas
 def filtraURLvalidas(df_in,tipo,formato_url):
@@ -96,7 +110,34 @@ indexables='Indexable'
 
 if f_entrada is not None:
     df_entrada=pd.read_csv(f_entrada,usecols=columnas, dtype=tipo)
+    st.subheader('Resumen del crawl')
+    #Obtenemos un resumen de las URL rastreadas
+    u_total=len(df_entrada.index)
+    u_indexables=(df_entrada['Indexability']=='Indexable').sum()
+    u_canonicalizadas=(df_entrada['Indexability Status']==CANONICALISED).sum()
+    u_noindex=(df_entrada['Indexability Status']==NOINDEX).sum()
+    u_30X=((df_entrada['Status Code']>=300)&(df_entrada['Status Code']<400)).sum()
+    u_40X=((df_entrada['Status Code']>=400)&(df_entrada['Status Code']<500)).sum()
+    u_50X=((df_entrada['Status Code']>=500)&(df_entrada['Status Code']<600)).sum()
+    u_noresponse=(df_entrada['Indexability Status']==NO_RESPONSE).sum()
+    u_bloqueado=(df_entrada['Indexability Status']==BLOQUEADO_ROBOTS).sum()
+    valores={"Indexables":[u_indexables], "Canonicalizadas":[u_canonicalizadas], "Noindex":[u_noindex], "Redirección 30X":[u_30X],"Error 40X":[u_40X], "Error 50X":[u_50X], "No Response":[u_noresponse], "Bloqueadas por robots":[u_bloqueado]}
+    df_resumen=pd.DataFrame(valores)
+    df_traspuesta = df_resumen.T.rename(columns={0: 'Número de URL'})
+    df_traspuesta["Porcentaje"]=df_traspuesta.iloc[:, 0]/u_total
+    fig=getPieChart(df_traspuesta['Número de URL'].tolist(), list(df_traspuesta.index))
+    st.pyplot(fig)
 
+
+    st.dataframe(df_traspuesta, width=1000)
+    st.download_button(
+        label="Descargar como CSV",
+        data=df_traspuesta.to_csv().encode('utf-8'),
+        file_name='resumen.csv',
+        mime='text/csv',
+    )
+
+    st.subheader('Seleccionamos los tipos de URL sobre los que trabajaremos')
     tipo_resultados= st.radio(
      "Tipo de URL que tendremos en cuenta",
      ['Indexables', 'Potencialmente indexables', 'Todas 200','Todas'], help='***Indexables***=URL 200, sin noindex y sin canonicalizar\n\n***Potencialmente indexables***=URL 200, sin noindex'+
@@ -107,8 +148,12 @@ if f_entrada is not None:
      ['Sólo HTML', 'HTML y PDF'], help='Tipos de URL que tendremos en cuenta. Para que cuenta las palabras de los PDF en el crawl debemos habilitar: Spider > Extraction > Store PDF')
 
 
+
     #Filtramos los resultados en función de la opción escogida
     df_filtrado=filtraURLvalidas(df_entrada,tipo_resultados,tipo_url)
+
+
+
     #Mostramos las URL más enlazadas
     df_top_enlaces=df_filtrado[['Address', "Status Code", 'Indexability', 'Indexability Status','Unique Inlinks', 'Inlinks', 'Crawl Depth']].sort_values(by='Unique Inlinks',ascending=False).reset_index(drop=True)
     st.subheader('Top de URL enlazadas')
