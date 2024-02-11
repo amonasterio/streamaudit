@@ -1,11 +1,24 @@
 import streamlit as st
-import posixpath
 import pandas as pd
 from urllib.parse import unquote, urlparse
-from pathlib import PosixPath, PurePosixPath
+from pathlib import PurePosixPath
 import logging
 logging.basicConfig(filename='test.log')
 
+CANONICALISED='Canonicalised'
+
+#Definimos las columnas sobre las que trabajaremos y su tipo
+columnas=["Address","Content Type","Status Code","Indexability","Indexability Status","Crawl Depth",'Unique Inlinks', 'Inlinks','Unique Outlinks', 'Outlinks','Word Count']
+tipo={"Address": "string", "Content Type": "string", "Status Code":"int","Indexability":"string", "Indexability Status":"string","Crawl Depth":int,'Unique Inlinks':int, 'Inlinks':int,'Unique Outlinks':int, 'Outlinks':int,'Word Count':int}
+
+
+#obtener el dominio de una URL
+def getDomainFromUrl(url_in):
+    # Parsear la URL
+    parsed_url = urlparse(url_in)
+    # Extraer el dominio
+    dominio = parsed_url.netloc
+    return dominio
 
 #Obtener los directorios de una URL por nivel
 def getPathUrl(url, nivel):
@@ -18,6 +31,25 @@ def getPathUrl(url, nivel):
             ruta+='/'+partes[i]
             i+=1
     return ruta
+
+
+#Filtra las URL en formato html o pdf validas en función de si son indexables, parcialmente indexables o todas
+def filtraURLvalidas(df_in,tipo,formato_url):
+    if formato_url=="Sólo HTML":
+        content_type='html'
+    else:
+        content_type='pdf|html'
+    if tipo=="Indexables":
+        df_mask=(df_in['Content Type'].str.contains(content_type,regex=True))&(df_in["Status Code"]==200)&(df_in['Indexability Status'].isna())
+    elif tipo=="Potencialmente indexables":
+        df_mask=(df_in['Content Type'].str.contains(content_type,regex=True))&(df_in["Status Code"]==200)&((df_in['Indexability Status'].isna())|(df_in['Indexability Status']).eq(CANONICALISED))
+    elif tipo=="Todas 200":
+        df_mask=(df_in['Content Type'].str.contains(content_type,regex=True))&(df_in["Status Code"]==200)
+    elif tipo=="Todas":
+         df_mask=(df_in['Content Type'].str.contains(content_type,regex=True))
+    df_out=df_in[df_mask]
+    return df_out
+    
 
 #Obtiene el número de veces que se repite cada anchor.
 #Devuelve un DataFrame con las columnas "Anchor" y "Num. veces"
@@ -54,7 +86,6 @@ st.set_page_config(
 )
 st.title("Arquitectura y contenidos")
 st.text("Devuelve datos relativos a la arquitectura y los contenidos.")
-st.text("Tenemos únicamente en cuenta contenidos indexables")
 
 
 
@@ -64,14 +95,22 @@ content_type='html'
 indexables='Indexable'
 
 if f_entrada is not None:
-    df=pd.read_csv(f_entrada)
+    df_entrada=pd.read_csv(f_entrada,usecols=columnas, dtype=tipo)
 
-    #Filtramos los resultados html e indexables
-    df_mask=(df['Content Type'].str.contains(content_type))&(df['Indexability']==indexables)
-    df_html=df[df_mask]
+    tipo_resultados= st.radio(
+     "Tipo de URL que tendremos en cuenta",
+     ['Indexables', 'Potencialmente indexables', 'Todas 200','Todas'], help='***Indexables***=URL 200, sin noindex y sin canonicalizar\n\n***Potencialmente indexables***=URL 200, sin noindex'+
+     '\n\n***Todas 200***=Todas las URL que devuelven 200\n\n***Todas***=Todas las URL rastreadas')
 
+    tipo_url= st.radio(
+     "Tipo de URL",
+     ['Sólo HTML', 'HTML y PDF'], help='Tipos de URL que tendremos en cuenta. Para que cuenta las palabras de los PDF en el crawl debemos habilitar: Spider > Extraction > Store PDF')
+
+
+    #Filtramos los resultados en función de la opción escogida
+    df_filtrado=filtraURLvalidas(df_entrada,tipo_resultados,tipo_url)
     #Mostramos las URL más enlazadas
-    df_top_enlaces=df_html[['Address','Unique Inlinks', 'Inlinks', 'Crawl Depth']].sort_values(by='Unique Inlinks',ascending=False).reset_index(drop=True)
+    df_top_enlaces=df_filtrado[['Address', "Status Code", 'Indexability', 'Indexability Status','Unique Inlinks', 'Inlinks', 'Crawl Depth']].sort_values(by='Unique Inlinks',ascending=False).reset_index(drop=True)
     st.subheader('Top de URL enlazadas')
     st.dataframe(df_top_enlaces, width=1000)
     st.download_button(
@@ -81,34 +120,39 @@ if f_entrada is not None:
         mime='text/csv',
     )
 
-    
+    st.text(df_filtrado.shape[0])
     #Obtenemos la ruta de directorios hasta el nivel especificado
     niveles_directorios=st.number_input(min_value=1,max_value=6,value=2,label='Seleccione el nivel de directorios a obtener')
     i=1
     while i <= niveles_directorios:
-        df_html['Directorio_'+str(i)]=df_html['Address'].apply(lambda x:getPathUrl(x,i))
+        df_filtrado['Directorio_'+str(i)]=df_filtrado['Address'].apply(lambda x:getPathUrl(x,i))
         i+=1
     
     n_dir='Directorio_'+str(niveles_directorios)
-    lista_directorios=df_html[n_dir].unique().tolist()
+    lista_directorios=df_filtrado[n_dir].unique().tolist()
     #Eliminamos el que venga vacío, porque realmente no existe
     directorios = list(filter(None, lista_directorios))
 
     df_dir=pd.DataFrame(columns=[n_dir, 'Num Pages', 'Unique Inlinks', 'Unique Outlinks'])
     df_dir[n_dir]=directorios
 
+    
     #Calculamos el número de páginas, inlinks y outlinks por directorio
     for i in range(len(df_dir)):
         dir_actual=df_dir.loc[i,n_dir]
-        df_temporal=df_html[df_html[n_dir]==dir_actual]
+        df_temporal=df_filtrado[df_filtrado[n_dir]==dir_actual]
         df_dir.loc[i,"Num Pages"]=len(df_temporal.index)
+        df_dir.loc[i,"Indexables"]=(df_temporal['Indexability']=='Indexable').sum()
+        df_dir.loc[i,"No Indexables"]=(df_temporal['Indexability']=='Non-Indexable').sum()
+        df_dir.loc[i,"Canonicalizadas"]=(df_temporal['Indexability Status']==CANONICALISED).sum()
         df_dir.loc[i,'Unique Inlinks']=df_temporal['Unique Inlinks'].sum()
-        df_dir.loc[i,'Unique Outlinks']=df_temporal['Unique Outlinks'].sum()    
-        df_dir.loc[i,'Media de palabras']=df_temporal['Word Count'].mean().round() 
-        df_dir.loc[i,'Mediana de palabras']=df_temporal['Word Count'].median().round() 
+        df_dir.loc[i,'Unique Outlinks']=df_temporal['Unique Outlinks'].sum()
+        df_dir.loc[i,'Media de palabras']=df_temporal['Word Count'].mean().round()
+        df_dir.loc[i,'Mediana de palabras']=df_temporal['Word Count'].median().round()
        
 
     st.subheader('Análisis por directorio')
+    
     st.dataframe(df_dir, width=1000)
     st.download_button(
                 label="Descargar como CSV",
@@ -119,17 +163,17 @@ if f_entrada is not None:
     
 
     st.subheader('Densidad de contenido')
-    max_word_count=df_html["Word Count"].max()
+    max_word_count=df_filtrado["Word Count"].max()
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric(label="Max. palabras en URL", value=max_word_count)
     with col2:
-        st.metric(label="Min. palabras en URL", value=df_html["Word Count"].min())
+        st.metric(label="Min. palabras en URL", value=df_filtrado["Word Count"].min())
     with col3:
-        st.metric(label="Media palabras en URL", value=int(df_html["Word Count"].mean()))
+        st.metric(label="Media palabras en URL", value=int(df_filtrado["Word Count"].mean()))
     with col4:
-        st.metric(label="Mediana palabras en URL", value=int(df_html["Word Count"].median()))
+        st.metric(label="Mediana palabras en URL", value=int(df_filtrado["Word Count"].median()))
     
     inferior=st.number_input(min_value=0,max_value=max_word_count,value=400,label='Seleccione valor intermedio inferior')
     superior=st.number_input(min_value=inferior,max_value=max_word_count,value=int((inferior+max_word_count)/2),label='Seleccione valor intermedio superior')
@@ -140,20 +184,24 @@ if f_entrada is not None:
 
 
     dict_contenido={
-        str_bajo:len(df_html[df_html["Word Count"]<=limites[0]].index),
-        str_medio:len(df_html[(df_html["Word Count"]>limites[0]) &(df_html["Word Count"]<=limites[1])].index),
-        str_alto:len(df_html[df_html["Word Count"]>limites[1]].index)
+        str_bajo:len(df_filtrado[df_filtrado["Word Count"]<=limites[0]].index),
+        str_medio:len(df_filtrado[(df_filtrado["Word Count"]>limites[0]) &(df_filtrado["Word Count"]<=limites[1])].index),
+        str_alto:len(df_filtrado[df_filtrado["Word Count"]>limites[1]].index)
     }
     
     st.dataframe(pd.DataFrame(dict_contenido,index=[0]))
 
     st.subheader('Anchor text utilizados')
-    dominio=st.text_input("Dominio (para extraer únicamente enlaces internos)")
+    #Obtnemos el dominio sobre el que queremos analizar los enlaces entrantes
+    primer_elemento = df_top_enlaces.iloc[0]['Address']
+    dominio=getDomainFromUrl(primer_elemento)
+    dominio_input=st.text_input("Dominio (para extraer únicamente enlaces internos)",dominio)
     f_enlaces=st.file_uploader('CSV con export de Inlinks Screaming Frog (all_inlinks.csv)', type='csv')
     if f_enlaces is not None:
         #Columnas sonbre las que vamos a trabajar
-        columnas=["Type","Source","Destination","Alt Text","Anchor","Status Code"]
-        df_enlaces=pd.read_csv(f_enlaces, usecols=columnas)
+        columnas_enlaces=["Type","Source","Destination","Alt Text","Anchor","Status Code"]
+        tipo_columnas_enlaces={"Type":"string", "Source":"string", "Destination":"string","Alt Text":"string","Anchor":"string","Status Code":int}
+        df_enlaces=pd.read_csv(f_enlaces, usecols=columnas_enlaces,dtype=tipo_columnas_enlaces)
         #Filtramos solo enlaces en hyperlinks e imágenes
         df_hyperlinks=df_enlaces[df_enlaces['Type'].isin(['Hyperlink','Image'])]
         #Dejamos sólo elaces a URL internas dentro del dominio enlazado
