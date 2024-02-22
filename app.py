@@ -138,15 +138,15 @@ if f_entrada is not None:
     )
 
     st.subheader('Seleccionamos los tipos de URL sobre los que trabajaremos')
+
+    tipo_url= st.radio(
+     "Content type:",
+     ['Sólo HTML', 'HTML y PDF'], help='Tipos de URL que tendremos en cuenta. Para que cuenta las palabras de los PDF en el crawl debemos habilitar: Spider > Extraction > Store PDF')
+
     tipo_resultados= st.radio(
      "Tipo de URL que tendremos en cuenta",
      ['Indexables', 'Potencialmente indexables', 'Todas 200','Todas'], help='***Indexables***=URL 200, sin noindex y sin canonicalizar\n\n***Potencialmente indexables***=URL 200, sin noindex'+
      '\n\n***Todas 200***=Todas las URL que devuelven 200\n\n***Todas***=Todas las URL rastreadas')
-
-    tipo_url= st.radio(
-     "Tipo de URL",
-     ['Sólo HTML', 'HTML y PDF'], help='Tipos de URL que tendremos en cuenta. Para que cuenta las palabras de los PDF en el crawl debemos habilitar: Spider > Extraction > Store PDF')
-
 
 
     #Filtramos los resultados en función de la opción escogida
